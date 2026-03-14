@@ -1,6 +1,7 @@
 from endpoint import app
 
 def main():
+
     print("Starting the chat API...")
     app.run(debug=True)
 

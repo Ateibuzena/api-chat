@@ -1,22 +1,11 @@
 from flask import request, jsonify
 
-users = []  # Lista para almacenar los IDs de los clientes conectados
-
-def receiveMsg():
+def receiveMsg(users):
     data = request.get_json()
 
     clientId = data.get('clientId', 'unknown')
-    user = None
-    for u in users:
-        if u["id"] == clientId:
-            user = u
-            break
-    if not user:
-        user = {
-            "id": clientId,
-            "mensajes": []
-        }
-        users.append(user)
+    if clientId == 'unknown':
+        return jsonify({"status": "Error", "message": "clientId is required"}), 400
     mensaje = data.get('message', '')
     if mensaje:
         for user in users:
@@ -30,12 +19,12 @@ def receiveMsg():
         "clientId": clientId
     })
 
-def sendMsg():
+def sendMsg(users):
     return jsonify({"status": "OK", "users": users})
 
-def chat():
+def chat(users):
     if request.method == 'POST':
-        return receiveMsg()
+        return receiveMsg(users)
 
     if request.method == 'GET':
-        return sendMsg()
+        return sendMsg(users)

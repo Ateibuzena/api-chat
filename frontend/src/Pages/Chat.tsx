@@ -1,23 +1,24 @@
 import { useState, useEffect } from 'react';
-import { v4 as uuidv4 } from 'uuid';
+import { useNavigate } from 'react-router-dom';
 
 export default function Chat() {
+
+    const router = useNavigate();
+
+    useEffect(() => {
+
+        if (!localStorage.getItem("clientId")) {
+            router("/"); // navegación SPA real, sin recarga
+                return;
+        }
+    }, []); // se ejecuta solo una vez al montar el componente
+    
     const stateMensaje = useState("");
 
     const mensaje = stateMensaje[0]; // mensaje que almacena el estado actual o cambiado
     const setMensaje = stateMensaje[1]; // funcion que cambia el estado
 
-    const stateId = useState("")
-
-    const clientId = stateId[0];
-    const setId = stateId[1];
-
-    useEffect(() => {
-        const storedId = localStorage.getItem("clientId") || uuidv4();
-        localStorage.setItem("clientId", storedId);
-        setId(storedId); // actualiza el estado con el clientId
-    }, []); // se ejecuta solo una vez al montar el componente
-
+    
     const handleChange = (event: React.ChangeEvent<HTMLInputElement>) => {
         setMensaje(event.target.value); // actualiza el estado con el valor del input
     }
@@ -31,7 +32,7 @@ export default function Chat() {
                 },
                 body: JSON.stringify({ 
                     message: mensaje, 
-                    clientId: clientId
+                    clientId: localStorage.getItem("clientId")
                 }) // envía el mensaje como JSON
             });
             if (!res.ok) {
