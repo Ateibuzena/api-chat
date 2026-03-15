@@ -1,64 +1,55 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { io, Socket } from 'socket.io-client';
 
 export default function Chat() {
-
     const router = useNavigate();
-
+    // --- Estados ---
     const [users, setUsers] = useState<string[]>([]);
+    const [selectedUser, setSelectedUser] = useState<string | null>(null);
+    const [mensaje, setMensaje] = useState<string>("");
+    const [socket, setSocket] = useState<Socket | null>(null);
 
     useEffect(() => {
-
-        if (!localStorage.getItem("clientId")) {
+        const clientId = localStorage.getItem("clientId");
+        if (!clientId) {
             router("/"); // navegación SPA real, sin recarga
-                return;
+            return;
         }
-        fetch('http://localhost:5000/users')
-            .then(res => res.json())
-            .then(data => {
-                console.log("Usuarios conectados: ", data);
-                setUsers(data); // actualiza el estado con la lista de usuarios
-            })
-            .catch(error => {
-                console.error("Error al obtener usuarios: ", error);
-            });
-    }, []); // se ejecuta solo una vez al montar el componente
-    
-    const stateMensaje = useState("");
+        
+        const s = io("http://localhost:5000");
+        setSocket(s);
 
-    const mensaje = stateMensaje[0]; // mensaje que almacena el estado actual o cambiado
-    const setMensaje = stateMensaje[1]; // funcion que cambia el estado
+        // Registramos el usuario en el servidor
+        s.emit("register", { clientId });
 
+        // Escuchamos actualizaciones de usuarios conectados
+        s.on("users_update", (data: { users: string[] }) => {
+            setUsers(data.users); // ahora users es array
+        });
+
+        s.on("receive_message", (data: { sender: string; receiver: string; message: string }) => {
+            console.log("Mensaje recibido:", data);
+        });
+        return () => {
+            s.disconnect(); // limpiamos la conexión al desmontar el componente
+        }
+    }, [router]); // se ejecuta solo una vez al montar el componente
     
     const handleChange = (event: React.ChangeEvent<HTMLInputElement>) => {
         setMensaje(event.target.value); // actualiza el estado con el valor del input
-    }
-
+    };
+    
     const handleSend = async () => {
-        try {
-            const res = await fetch('http://localhost:5000/chat', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ 
-                    message: mensaje, 
-                    clientId: localStorage.getItem("clientId")
-                }) // envía el mensaje como JSON
-            });
-            if (!res.ok) {
-                throw new Error(`HTTP error! status: ${res.status}`);
-            }
-            const data = await res.json();
-            console.log("Respuesta del backend: ", data);
-            setMensaje("") // limpia el input
-        } catch (error) {
-            console.error("Error al enviar el mensaje: ", error
-            )
-        }
-    }
+        if (!selectedUser || !mensaje.trim() || !socket) return; // no enviar si no hay usuario seleccionado o mensaje vacío
+        socket.emit("send_message", {
+            sender: localStorage.getItem("clientId"), 
+            receiver: selectedUser, 
+            message: mensaje
+        });
+        setMensaje(""); // limpia el input
+    };
 
-    const [selectedUser, setSelectedUser] = useState<string | null>(null);
 
     return (
         <div>

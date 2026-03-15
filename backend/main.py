@@ -1,9 +1,9 @@
-from endpoint import app
+from endpoint import app, socketio
 
 def main():
 
     print("Starting the chat API...")
-    app.run(debug=True)
+    socketio.run(app, debug=True)
 
 if __name__ == "__main__":
     main()
