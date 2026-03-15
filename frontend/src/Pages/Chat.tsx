@@ -9,6 +9,8 @@ export default function Chat() {
     const [selectedUser, setSelectedUser] = useState<string | null>(null);
     const [mensaje, setMensaje] = useState<string>("");
     const [socket, setSocket] = useState<Socket | null>(null);
+    const [receivedMessages, setReceivedMessages] = useState<{ sender: string; message: string }[]>([]);
+    const [userMessages, setUserMessages] = useState<{ [key: string]: { from: string; message: string }[] }>({});
 
     useEffect(() => {
         const clientId = localStorage.getItem("clientId");
@@ -28,8 +30,8 @@ export default function Chat() {
             setUsers(data.users); // ahora users es array
         });
 
-        s.on("receive_message", (data: { sender: string; receiver: string; message: string }) => {
-            console.log("Mensaje recibido:", data);
+        s.on("receive_message", (data: { sender: string; message: string }) => {
+            setReceivedMessages(prev => [...prev, { sender: data.sender, message: data.message }]);
         });
         return () => {
             s.disconnect(); // limpiamos la conexión al desmontar el componente
@@ -53,20 +55,7 @@ export default function Chat() {
 
     return (
         <div>
-            {/* caja para escribir mensajes */ }
-            <input
-                type="text"
-                placeholder={selectedUser ? `Message to ${selectedUser}` : "Type your message..."}
-                disabled={!selectedUser} // deshabilita el input si no hay usuario seleccionado
-                style={{
-                    width: '80%',
-                    padding: '10px',
-                    fontSize: '16px'
-                }}
-                value={mensaje} // vincula el valor del input con el estado
-                onChange={handleChange}
-            />
-
+            {/* Lista de usuarios conectados */ }
             <div style={{ marginTop: '20px' }}>
                 <h3>Connected Users:</h3>
                 {users
@@ -86,6 +75,44 @@ export default function Chat() {
                 </button>
                 ))}
             </div>
+
+            {/* caja del chat */ }
+            {selectedUser && (
+                <div style={{ marginTop: '20px' }}>
+                    <h3>Chat with {selectedUser}:</h3>
+                    <div style={{
+                        border: '1px solid #ccc',
+                        padding: '10px',
+                        height: '200px',
+                        overflowY: 'scroll'
+                        }}>
+                        {receivedMessages.filter(msg => msg.sender === selectedUser).map((msg, index) => (
+                            <div key={index} style={{ textAlign: 'left' }}>
+                                <strong>{msg.sender}:</strong> {msg.message}
+                            </div>
+                        ))}
+                        {userMessages[selectedUser]?.map((msg, index) => (
+                            <div key={index} style={{ textAlign: 'right' }}>
+                                <strong>You:</strong> {msg.message}
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
+
+            {/* caja para escribir mensajes */ }
+            <input
+                type="text"
+                placeholder={selectedUser ? `Message to ${selectedUser}` : "Type your message..."}
+                disabled={!selectedUser} // deshabilita el input si no hay usuario seleccionado
+                style={{
+                    width: '80%',
+                    padding: '10px',
+                    fontSize: '16px'
+                }}
+                value={mensaje} // vincula el valor del input con el estado
+                onChange={handleChange}
+            />
 
             {/* boton de enviar mensaje */}
             <button

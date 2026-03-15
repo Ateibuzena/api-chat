@@ -23,6 +23,10 @@ def login_point():
 def get_users():
     return jsonify([u["id"] for u in users])
 
+@app.route('/db', methods=['GET'])
+def get_db():
+    return jsonify({"users": [u for u in users]})
+
 # ---------- SOCKET.IO EVENTS ----------
 @socketio.on('connect')
 def handle_connect():

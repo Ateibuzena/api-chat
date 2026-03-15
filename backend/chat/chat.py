@@ -8,7 +8,11 @@ def chat(users: List[Dict], sender: str, receiver: str, message: str) -> Dict:
                 "from": sender,
                 "message": message
             })
-            break
+        if u["id"] == sender:
+            u["mensajes"].append({
+                "to": receiver,
+                "message": message
+            })
     return {
         "sender": sender,
         "receiver": receiver,
