@@ -1,130 +1,158 @@
-import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { io, Socket } from 'socket.io-client';
+import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import { io, Socket } from "socket.io-client";
+
+type Message = { from: string; message: string };
+type ChatHistoryItem = { sender: string; receiver: string; message: string };
 
 export default function Chat() {
-    const router = useNavigate();
-    // --- Estados ---
-    const [users, setUsers] = useState<string[]>([]);
-    const [selectedUser, setSelectedUser] = useState<string | null>(null);
-    const [mensaje, setMensaje] = useState<string>("");
-    const [socket, setSocket] = useState<Socket | null>(null);
-    const [receivedMessages, setReceivedMessages] = useState<{ sender: string; message: string }[]>([]);
-    const [userMessages, setUserMessages] = useState<{ [key: string]: { from: string; message: string }[] }>({});
+  const router = useNavigate();
+  const [users, setUsers] = useState<string[]>([]);
+  const [selectedUser, setSelectedUser] = useState<string | null>(null);
+  const [mensaje, setMensaje] = useState<string>("");
+  const [socket, setSocket] = useState<Socket | null>(null);
 
-    useEffect(() => {
-        const clientId = localStorage.getItem("clientId");
-        if (!clientId) {
-            router("/"); // navegación SPA real, sin recarga
-            return;
-        }
-        
-        const s = io("http://localhost:5000");
-        setSocket(s);
+  // conversaciones: clave = `${userA}_${userB}` (orden alfabético)
+  const [conversations, setConversations] = useState<{ [pair: string]: Message[] }>({});
 
-        // Registramos el usuario en el servidor
-        s.emit("register", { clientId });
+  const clientId = localStorage.getItem("clientId") || "";
 
-        // Escuchamos actualizaciones de usuarios conectados
-        s.on("users_update", (data: { users: string[] }) => {
-            setUsers(data.users); // ahora users es array
-        });
+  // --- Helpers ---
+  const getPairKey = (user1: string, user2: string) => {
+    return [user1, user2].sort().join("_");
+  };
 
-        s.on("receive_message", (data: { sender: string; message: string }) => {
-            setReceivedMessages(prev => [...prev, { sender: data.sender, message: data.message }]);
-        });
-        return () => {
-            s.disconnect(); // limpiamos la conexión al desmontar el componente
-        }
-    }, [router]); // se ejecuta solo una vez al montar el componente
-    
-    const handleChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-        setMensaje(event.target.value); // actualiza el estado con el valor del input
+  const addMessageToConversation = (from: string, to: string, message: string) => {
+    const key = getPairKey(from, to);
+    setConversations(prev => ({
+      ...prev,
+      [key]: [...(prev[key] || []), { from, message }]
+    }));
+  };
+
+  // --- Effects ---
+  useEffect(() => {
+    if (!clientId) {
+      router("/");
+      return;
+    }
+
+    const s = io("http://localhost:5000");
+    setSocket(s);
+
+    s.emit("register", { clientId });
+
+    s.on("users_update", (data: { users: string[] }) => {
+      setUsers(data.users.filter(u => u !== clientId)); // no mostrarte a ti
+    });
+
+    s.on("receive_message", (data: { sender: string; message: string }) => {
+      addMessageToConversation(data.sender, clientId, data.message);
+    });
+
+    s.on("chat_history", (data: { peerId: string; messages: ChatHistoryItem[] }) => {
+      const key = getPairKey(clientId, data.peerId);
+      setConversations(prev => ({
+        ...prev,
+        [key]: data.messages.map(msg => ({
+          from: msg.sender,
+          message: msg.message
+        }))
+      }));
+    });
+
+    return () => {
+      s.disconnect();
     };
-    
-    const handleSend = async () => {
-        if (!selectedUser || !mensaje.trim() || !socket) return; // no enviar si no hay usuario seleccionado o mensaje vacío
-        socket.emit("send_message", {
-            sender: localStorage.getItem("clientId"), 
-            receiver: selectedUser, 
-            message: mensaje
-        });
-        setMensaje(""); // limpia el input
-    };
+  }, [clientId, router]);
 
+  useEffect(() => {
+    if (!socket || !selectedUser) return;
+    socket.emit("join_private_chat", {
+      clientId,
+      peerId: selectedUser
+    });
+  }, [socket, selectedUser, clientId]);
 
-    return (
-        <div>
-            {/* Lista de usuarios conectados */ }
-            <div style={{ marginTop: '20px' }}>
-                <h3>Connected Users:</h3>
-                {users
-                .filter(userId => userId !== localStorage.getItem("clientId"))
-                .map(userId => (
-                <button
-                    key={userId}
-                    onClick={() => setSelectedUser(userId)}
-                    style={{
-                        display: "block",
-                        margin: "5px",
-                        padding: "10px",
-                        backgroundColor: selectedUser === userId ? "lightblue" : "white"
-                    }}
-                >
-                    {userId}
-                </button>
-                ))}
-            </div>
+  // --- Handlers ---
+  const handleSend = () => {
+    if (!selectedUser || !mensaje.trim() || !socket) return;
+    socket.emit("send_message", {
+      sender: clientId,
+      receiver: selectedUser,
+      message: mensaje
+    });
+    addMessageToConversation(clientId, selectedUser, mensaje);
+    setMensaje("");
+  };
 
-            {/* caja del chat */ }
-            {selectedUser && (
-                <div style={{ marginTop: '20px' }}>
-                    <h3>Chat with {selectedUser}:</h3>
-                    <div style={{
-                        border: '1px solid #ccc',
-                        padding: '10px',
-                        height: '200px',
-                        overflowY: 'scroll'
-                        }}>
-                        {receivedMessages.filter(msg => msg.sender === selectedUser).map((msg, index) => (
-                            <div key={index} style={{ textAlign: 'left' }}>
-                                <strong>{msg.sender}:</strong> {msg.message}
-                            </div>
-                        ))}
-                        {userMessages[selectedUser]?.map((msg, index) => (
-                            <div key={index} style={{ textAlign: 'right' }}>
-                                <strong>You:</strong> {msg.message}
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            )}
+  // --- Render ---
+  const currentMessages =
+    selectedUser && conversations[getPairKey(clientId, selectedUser)]
+      ? conversations[getPairKey(clientId, selectedUser)]
+      : [];
 
-            {/* caja para escribir mensajes */ }
-            <input
-                type="text"
-                placeholder={selectedUser ? `Message to ${selectedUser}` : "Type your message..."}
-                disabled={!selectedUser} // deshabilita el input si no hay usuario seleccionado
-                style={{
-                    width: '80%',
-                    padding: '10px',
-                    fontSize: '16px'
-                }}
-                value={mensaje} // vincula el valor del input con el estado
-                onChange={handleChange}
-            />
+  return (
+    <div>
+      {/* Lista de usuarios */}
+      <div style={{ marginTop: "20px" }}>
+        <h3>Connected Users:</h3>
+        {users.map(userId => (
+          <button
+            key={userId}
+            onClick={() => setSelectedUser(userId)}
+            style={{
+              display: "block",
+              margin: "5px",
+              padding: "10px",
+              backgroundColor: selectedUser === userId ? "lightblue" : "white"
+            }}
+          >
+            {userId}
+          </button>
+        ))}
+      </div>
 
-            {/* boton de enviar mensaje */}
-            <button
-                onClick={handleSend}
-                disabled={!mensaje.trim() || !selectedUser} // deshabilita el botón si no hay mensaje o usuario seleccionado
-                style={{
-                    padding: '10px 20px',
-                    fontSize: '16px',
-                    marginLeft: '10px'
-                }}>
-                Send
-            </button>
+      {/* Chat */}
+      {selectedUser && (
+        <div style={{ marginTop: "20px" }}>
+          <h3>Chat with {selectedUser}:</h3>
+          <div
+            style={{
+              border: "1px solid #ccc",
+              padding: "10px",
+              height: "200px",
+              overflowY: "scroll"
+            }}
+          >
+            {currentMessages.map((msg, index) => (
+              <div
+                key={index}
+                style={{ textAlign: msg.from === clientId ? "right" : "left" }}
+              >
+                <strong>{msg.from === clientId ? "You" : msg.from}:</strong> {msg.message}
+              </div>
+            ))}
+          </div>
         </div>
-    )
+      )}
+
+      {/* Input */}
+      <input
+        type="text"
+        placeholder={selectedUser ? `Message to ${selectedUser}` : "Type your message..."}
+        disabled={!selectedUser}
+        style={{ width: "80%", padding: "10px", fontSize: "16px" }}
+        value={mensaje}
+        onChange={e => setMensaje(e.target.value)}
+      />
+      <button
+        onClick={handleSend}
+        disabled={!mensaje.trim() || !selectedUser}
+        style={{ padding: "10px 20px", fontSize: "16px", marginLeft: "10px" }}
+      >
+        Send
+      </button>
+    </div>
+  );
 }

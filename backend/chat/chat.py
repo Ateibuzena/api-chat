@@ -6,7 +6,8 @@ def chat(users: List[Dict], sender: str, receiver: str, message: str) -> Dict:
         if u["id"] == receiver:
             u["mensajes"].append({
                 "from": sender,
-                "message": message
+                "message": message,
+                "delivered": False
             })
         if u["id"] == sender:
             u["mensajes"].append({
