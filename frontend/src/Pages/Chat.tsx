@@ -5,12 +5,23 @@ export default function Chat() {
 
     const router = useNavigate();
 
+    const [users, setUsers] = useState<string[]>([]);
+
     useEffect(() => {
 
         if (!localStorage.getItem("clientId")) {
             router("/"); // navegación SPA real, sin recarga
                 return;
         }
+        fetch('http://localhost:5000/users')
+            .then(res => res.json())
+            .then(data => {
+                console.log("Usuarios conectados: ", data);
+                setUsers(data); // actualiza el estado con la lista de usuarios
+            })
+            .catch(error => {
+                console.error("Error al obtener usuarios: ", error);
+            });
     }, []); // se ejecuta solo una vez al montar el componente
     
     const stateMensaje = useState("");
@@ -47,12 +58,15 @@ export default function Chat() {
         }
     }
 
+    const [selectedUser, setSelectedUser] = useState<string | null>(null);
+
     return (
         <div>
             {/* caja para escribir mensajes */ }
             <input
                 type="text"
-                placeholder="Type your message here..."
+                placeholder={selectedUser ? `Message to ${selectedUser}` : "Type your message..."}
+                disabled={!selectedUser} // deshabilita el input si no hay usuario seleccionado
                 style={{
                     width: '80%',
                     padding: '10px',
@@ -62,9 +76,30 @@ export default function Chat() {
                 onChange={handleChange}
             />
 
+            <div style={{ marginTop: '20px' }}>
+                <h3>Connected Users:</h3>
+                {users
+                .filter(userId => userId !== localStorage.getItem("clientId"))
+                .map(userId => (
+                <button
+                    key={userId}
+                    onClick={() => setSelectedUser(userId)}
+                    style={{
+                        display: "block",
+                        margin: "5px",
+                        padding: "10px",
+                        backgroundColor: selectedUser === userId ? "lightblue" : "white"
+                    }}
+                >
+                    {userId}
+                </button>
+                ))}
+            </div>
+
             {/* boton de enviar mensaje */}
             <button
                 onClick={handleSend}
+                disabled={!mensaje.trim() || !selectedUser} // deshabilita el botón si no hay mensaje o usuario seleccionado
                 style={{
                     padding: '10px 20px',
                     fontSize: '16px',

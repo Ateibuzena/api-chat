@@ -17,3 +17,7 @@ def chat_point():
 @app.route('/login', methods=['POST'])
 def login_point():
     return login_handler()
+
+@app.route('/users', methods=['GET'])
+def get_users():
+    return jsonify([u["id"] for u in users])
